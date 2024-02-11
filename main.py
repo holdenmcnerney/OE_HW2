@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 
 # Matplotlib global variables
 mpl.rcParams['legend.loc'] = 'lower right'
-mpl.rcParams['lines.linewidth'] = 0.75
+mpl.rcParams['lines.linewidth'] = 0.66
+mpl.rcParams['lines.linestyle'] = '--'
 
 def build_gust_mats(sigma_mat: np.array, L_mat: np.array):
 
@@ -26,9 +27,9 @@ def build_gust_mats(sigma_mat: np.array, L_mat: np.array):
                   [0, 0, 0, 0, - v_inf / L_w]])
     
     B = np.array([[sigma_u * (2 * v_inf / np.pi / L_u)**(1 / 2)], 
-                  [sigma_v * (3 * v_inf / np.pi / L_v)**(1 / 2)], 
+                  [sigma_v * (3 * v_inf / L_v)**(1 / 2)], 
                   [1], 
-                  [sigma_w * (3 * v_inf / np.pi / L_w)**(1 / 2)], 
+                  [sigma_w * (3 * v_inf /  L_w)**(1 / 2)], 
                   [1]])
 
     return A, B
@@ -43,7 +44,8 @@ def calc_time_hist(sigma_mat: np.array, L_mat: np.array):
 
     while t < t_total:
 
-        dvel = A @ vel_old + B * sp.stats.norm.rvs(scale=1/dt)
+        dvel = A @ vel_old + B * sp.stats.norm.rvs(scale=np.sqrt(1/dt))
+        # dvel = A @ vel_old + B * np.random.normal(0, np.sqrt(1/dt))
         vel_new = vel_old + dvel * dt
         vel_hist = np.vstack((vel_hist, vel_new.T))
         vel_old = vel_new
@@ -75,6 +77,8 @@ def main():
 
     fig, ax = plt.subplots(3, 1)
     fig.suptitle(r'Gust Velocity ($u_g, v_g, w_g$) vs Time')
+    fig.supxlabel(r'Time, $s$')
+    fig.supylabel(r'Velocity, $ft/s$')
     ax[0].set_title(r'$u_g$ vs time')
     ax[0].plot(t_hist_light, vel_hist_light[:, 0], label=r'light, $\sigma_u=5$')
     ax[0].plot(t_hist_medium, vel_hist_medium[:, 0], label=r'medium, $\sigma_u=10$')

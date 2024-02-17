@@ -6,11 +6,14 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 # Matplotlib global variables
+plt.rcParams['axes.grid'] = True
 mpl.rcParams['legend.loc'] = 'lower right'
 mpl.rcParams['lines.linewidth'] = 0.66
-mpl.rcParams['lines.linestyle'] = '--'
 
 def build_gust_mats(sigma_mat: np.array, L_mat: np.array):
+    '''
+    Builds out A and B matrices given the sigma and L values
+    '''
 
     sigma_u = sigma_mat[0]
     sigma_v = sigma_mat[1]
@@ -35,20 +38,35 @@ def build_gust_mats(sigma_mat: np.array, L_mat: np.array):
     return A, B
 
 def calc_time_hist(sigma_mat: np.array, L_mat: np.array):
+    '''
+    Generates time history for gust velocities using discretized gust model
+    '''
 
     vel_old = np.zeros((5, 1))
     vel_hist = vel_old.T
     t_hist = [0]
     t = 0
     A, B = build_gust_mats(sigma_mat, L_mat)
+    nsteps = int(t_total / dt)
+
+    Ad = sp.linalg.expm(A * dt)
+    Bd = np.linalg.inv(A) @ (Ad - np.eye(5)) @ B
+    P = np.array([[np.sqrt(1 / dt), 0, 0, 0, 0],
+                  [0, np.sqrt(1 / dt), 0, 0, 0],
+                  [0, 0, np.sqrt(1 / dt), 0, 0],
+                  [0, 0, 0, np.sqrt(1 / dt), 0],
+                  [0, 0, 0, 0, np.sqrt(1 / dt)]])
+    n_dist = sp.stats.multivariate_normal([0, 0, 0, 0, 0], cov=P**2)
+    n_sample = n_dist.rvs(size=nsteps + 1)
+    idx = 0
 
     while t < t_total:
 
-        dvel = A @ vel_old + B * sp.stats.norm.rvs(scale=np.sqrt(1/dt))
-        # dvel = A @ vel_old + B * np.random.normal(0, np.sqrt(1/dt))
-        vel_new = vel_old + dvel * dt
+        n = np.atleast_2d(n_sample[idx]).T
+        vel_new = Ad @ vel_old + Bd * n
         vel_hist = np.vstack((vel_hist, vel_new.T))
         vel_old = vel_new
+        idx += 1
         t += dt
         t_hist.append(t)
     
@@ -56,10 +74,7 @@ def calc_time_hist(sigma_mat: np.array, L_mat: np.array):
 
 def main():
 
-    global v_inf
-    global alt
-    global dt
-    global t_total
+    global v_inf, alt, dt, t_total
     v_inf = 824     # ft/s
     alt = 20_000    # ft
     dt = 0.01       # s
@@ -72,29 +87,32 @@ def main():
     L_mat = np.array([1750, 1750, 1750])
 
     vel_hist_light, t_hist_light = calc_time_hist(sigma_mat_dict['light'], L_mat)
+    print('done 1')
     vel_hist_medium, t_hist_medium = calc_time_hist(sigma_mat_dict['medium'], L_mat)
+    print('done 2')
     vel_hist_heavy, t_hist_heavy = calc_time_hist(sigma_mat_dict['heavy'], L_mat)
+    print('done 3')
 
     fig, ax = plt.subplots(3, 1)
     fig.suptitle(r'Gust Velocity ($u_g, v_g, w_g$) vs Time')
     fig.supxlabel(r'Time, $s$')
     fig.supylabel(r'Velocity, $ft/s$')
     ax[0].set_title(r'$u_g$ vs time')
-    ax[0].plot(t_hist_light, vel_hist_light[:, 0], label=r'light, $\sigma_u=5$')
-    ax[0].plot(t_hist_medium, vel_hist_medium[:, 0], label=r'medium, $\sigma_u=10$')
     ax[0].plot(t_hist_heavy, vel_hist_heavy[:, 0], label=r'heavy, $\sigma_u=20$')
+    ax[0].plot(t_hist_medium, vel_hist_medium[:, 0], label=r'medium, $\sigma_u=10$')
+    ax[0].plot(t_hist_light, vel_hist_light[:, 0], label=r'light, $\sigma_u=5$')
     ax[0].legend()
 
     ax[1].set_title(r'$v_g$ vs time')
-    ax[1].plot(t_hist_light, vel_hist_light[:, 1], label=r'light, $\sigma_v=5$')
-    ax[1].plot(t_hist_medium, vel_hist_medium[:, 1], label=r'medium, $\sigma_v=10$')
-    ax[1].plot(t_hist_heavy, vel_hist_heavy[:, 1], label=r'heavy, $\sigma_v=20$')
+    ax[1].plot(t_hist_heavy, vel_hist_heavy[:, 1], label=r'heavy, $\sigma_u=20$')
+    ax[1].plot(t_hist_medium, vel_hist_medium[:, 1], label=r'medium, $\sigma_u=10$')
+    ax[1].plot(t_hist_light, vel_hist_light[:, 1], label=r'light, $\sigma_u=5$')
     ax[1].legend()
 
     ax[2].set_title(r'$w_g$ vs time')
-    ax[2].plot(t_hist_light, vel_hist_light[:, 3], label=r'light, $\sigma_w=5$')
-    ax[2].plot(t_hist_medium, vel_hist_medium[:, 3], label=r'medium, $\sigma_w=10$')
-    ax[2].plot(t_hist_heavy, vel_hist_heavy[:, 3], label=r'heavy, $\sigma_w=20$')
+    ax[2].plot(t_hist_heavy, vel_hist_heavy[:, 3], label=r'heavy, $\sigma_u=20$')
+    ax[2].plot(t_hist_medium, vel_hist_medium[:, 3], label=r'medium, $\sigma_u=10$')
+    ax[2].plot(t_hist_light, vel_hist_light[:, 3], label=r'light, $\sigma_u=5$')
     ax[2].legend()
 
     plt.show()
